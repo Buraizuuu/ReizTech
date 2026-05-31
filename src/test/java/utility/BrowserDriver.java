@@ -8,13 +8,16 @@ import org.openqa.selenium.edge.EdgeDriver;
 import org.openqa.selenium.firefox.FirefoxDriver;
 
 public class BrowserDriver {
+
     public static WebDriver driver;
-    private static final String BROWSER = "chrome"; // Change this to "firefox" or "edge" as needed
+
+    private static final String BROWSER   = System.getProperty("browser",
+            System.getenv().getOrDefault("BROWSER", "chrome"));
+    private static final boolean HEADLESS = Boolean.parseBoolean(
+            System.getProperty("headless", System.getenv().getOrDefault("HEADLESS", "false")));
 
     public static void setupDriver() {
         if (driver == null) {
-            boolean isHeadless = false; // 👉 Or fetch from config file
-
             switch (BROWSER.toLowerCase()) {
                 case "firefox":
                     WebDriverManager.firefoxdriver().setup();
@@ -27,47 +30,32 @@ public class BrowserDriver {
                 case "chrome":
                 default:
                     WebDriverManager.chromedriver().setup();
-                    ChromeOptions chromeOptions = new ChromeOptions();
-
-                    if (isHeadless) {
-                        chromeOptions.addArguments("--headless=new");
-                        chromeOptions.addArguments("--disable-gpu");
-                        chromeOptions.addArguments("--window-size=1920,1080");
-
-                        // Fake desktop user-agent
-                        chromeOptions.addArguments(
-                                "user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36");
+                    ChromeOptions options = new ChromeOptions();
+                    if (HEADLESS) {
+                        options.addArguments("--headless=new", "--disable-gpu",
+                                "--window-size=1920,1080",
+                                "user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36");
                     }
-
-                    driver = new ChromeDriver(chromeOptions);
-
-                    // Maximize only if NOT headless
-                    if (!isHeadless) {
-                        driver.manage().window().maximize();
-                    }
-
+                    driver = new ChromeDriver(options);
+                    if (!HEADLESS) driver.manage().window().maximize();
                     break;
             }
-
             driver.manage().deleteAllCookies();
         }
     }
 
     public static void openUrl(String url) {
-        if (driver == null) {
-            setupDriver();
-        }
+        if (driver == null) setupDriver();
         driver.get(url);
     }
 
     public static void closeDriver() {
         if (driver != null) {
             driver.quit();
-            driver = null; // Reset driver to null after quitting
+            driver = null;
         }
     }
 
-    // Optional: Get driver instance anywhere
     public static WebDriver getDriver() {
         return driver;
     }

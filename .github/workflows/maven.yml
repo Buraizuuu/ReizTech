@@ -1,0 +1,50 @@
+name: Selenium BDD Tests
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+    inputs:
+      browser:
+        description: 'Browser (chrome | firefox | edge)'
+        required: false
+        default: 'chrome'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Java 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+
+      - name: Cache Maven packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.m2
+          key: ${{ runner.os }}-m2-${{ hashFiles('**/pom.xml') }}
+          restore-keys: ${{ runner.os }}-m2
+
+      - name: Run tests (headless)
+        run: mvn test -Dbrowser=${{ github.event.inputs.browser || 'chrome' }} -Dheadless=true
+
+      - name: Upload Cucumber reports
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: cucumber-reports
+          path: target/report/
+
+      - name: Upload failure screenshots
+        uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: failure-screenshots
+          path: target/screenshots/

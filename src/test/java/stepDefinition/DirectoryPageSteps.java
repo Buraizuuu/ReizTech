@@ -1,22 +1,21 @@
 package stepDefinition;
 
 import io.cucumber.java.en.*;
-import locators.DirectoryPage;
-import utility.BasePage;
+import pages.DirectoryPage;
 import utility.BrowserDriver;
 import utility.FakeDataUtil;
 
-public class DirectoryPageSteps extends BrowserDriver {
+public class DirectoryPageSteps {
 
-    private BasePage basePage = new BasePage(driver);
+    private final DirectoryPage directoryPage = new DirectoryPage(BrowserDriver.getDriver());
 
     @And("User clicks directory menu")
-    public void click_directory() {
-        basePage.click(DirectoryPage.btnDirectory);
+    public void userClicksDirectoryMenu() {
+        directoryPage.navigateToDirectory();
     }
 
     @Then("Search via name")
-    public void search_name() {
-        basePage.type(DirectoryPage.txtName, FakeDataUtil.getFirstName());
+    public void searchViaName() {
+        directoryPage.searchByName(FakeDataUtil.getFirstName());
     }
 }

@@ -1,6 +1,6 @@
 # Selenium BDD Framework
 
-A Behavior-Driven Development (BDD) test automation framework built with **Selenium 4**, **Cucumber 7**, and **JUnit 4** in Java. Designed to be readable, maintainable, and ready for CI/CD pipelines.
+A Behavior-Driven Development (BDD) test automation framework built with **Selenium 4**, **Cucumber 7**, and **JUnit 4** in Java. Features a proper **Page Object Model**, configurable browser/headless execution via system properties, automatic failure screenshots, and a **GitHub Actions CI/CD pipeline**.
 
 > **Application Under Test:** [OrangeHRM Live Demo](https://opensource-demo.orangehrmlive.com/)
 
@@ -21,33 +21,49 @@ A Behavior-Driven Development (BDD) test automation framework built with **Selen
 
 ---
 
+## What Was Improved
+
+- **Page Object Model** — `pages/LoginPage.java` and `pages/DirectoryPage.java` replace the old static locator bags. Each page class extends `BasePage`, owns its locators as private fields, and exposes clean action methods (`login()`, `isDashboardVisible()`, etc.)
+- **Hooks moved to `utility/`** — `utility/Hooks.java` is now a plain class (no `extends BrowserDriver`), using `BrowserDriver.setupDriver()` / `BrowserDriver.closeDriver()` via static calls for clean lifecycle management
+- **Configurable browser & headless** — `BrowserDriver` reads `browser` and `headless` from system properties (`-Dbrowser`, `-Dheadless`) with environment variable fallbacks, so no source edits are needed to switch browsers or run headless
+- **CI/CD pipeline** — `.github/workflows/maven.yml` runs the full suite headless on every push/PR, caches Maven dependencies, and uploads Cucumber reports and failure screenshots as artifacts
+- **`locators/` package deprecated** — the old `locators/LoginPage.java` and `locators/DirectoryPage.java` (static `By` bags) are superseded by the `pages/` package and kept only for reference
+
+---
+
 ## Project Structure
 
 ```
 Selenium-BDD/
+├── .github/
+│   └── workflows/
+│       └── maven.yml              # GitHub Actions CI pipeline
 ├── pom.xml
 └── src/
     └── test/
         └── java/
             ├── features/
             │   └── Login.feature          # Gherkin test scenarios
-            ├── locators/
-            │   ├── LoginPage.java         # Login page element locators
-            │   └── DirectoryPage.java     # Directory page element locators
+            ├── locators/                  # Deprecated — superseded by pages/
+            │   ├── LoginPage.java
+            │   └── DirectoryPage.java
+            ├── pages/                     # Page Object Model
+            │   ├── LoginPage.java         # Login page actions + locators
+            │   └── DirectoryPage.java     # Directory page actions + locators
             ├── resources/
             │   └── config/
             │       └── config.json        # Environment configuration
             ├── runner/
             │   └── TestRunner.java        # Cucumber JUnit runner
             ├── stepDefinition/
-            │   ├── Hooks.java             # Before/After hooks + screenshots
             │   ├── LoginPageSteps.java    # Login step implementations
             │   └── DirectoryPageSteps.java# Directory step implementations
             └── utility/
                 ├── BasePage.java          # Reusable WebDriver action wrappers
                 ├── BrowserDriver.java     # WebDriver factory (Chrome/Firefox/Edge)
                 ├── ConfigReader.java      # Reads config.json at runtime
-                └── FakeDataUtil.java      # Random test data via DataFaker
+                ├── FakeDataUtil.java      # Random test data via DataFaker
+                └── Hooks.java             # Before/After hooks + screenshots
 ```
 
 ---
@@ -83,27 +99,48 @@ Edit `src/test/java/resources/config/config.json`:
 
 ## Running Tests
 
-### Run all tests
+### Run all tests (Chrome, headed)
 ```bash
 mvn test
 ```
 
 ### Run with a specific browser
-Open `src/test/java/utility/BrowserDriver.java` and change the `BROWSER` constant:
-```java
-private static final String BROWSER = "chrome";  // "firefox" or "edge"
+```bash
+mvn test -Dbrowser=firefox
+mvn test -Dbrowser=edge
 ```
 
 ### Run headless
-In `BrowserDriver.java`, toggle the headless flag:
-```java
-private static final boolean isHeadless = true;
+```bash
+mvn test -Dheadless=true
+```
+
+### Run headless on a specific browser
+```bash
+mvn test -Dbrowser=firefox -Dheadless=true
+mvn test -Dbrowser=edge -Dheadless=true
 ```
 
 ### Run a specific tag
 ```bash
 mvn test -Dcucumber.filter.tags="@smoke"
 ```
+
+The `browser` and `headless` flags can also be set via environment variables (`BROWSER`, `HEADLESS`) — useful in Docker or CI environments where you cannot change the Maven command.
+
+---
+
+## CI/CD
+
+A GitHub Actions workflow (`.github/workflows/maven.yml`) runs on every push and pull request to `main`:
+
+1. Checks out the code and sets up Java 21 (Temurin)
+2. Restores the Maven dependency cache to speed up builds
+3. Runs the full test suite headless: `mvn test -Dbrowser=chrome -Dheadless=true`
+4. Uploads the Cucumber HTML/JSON reports under the `cucumber-reports` artifact (always)
+5. Uploads failure screenshots under `failure-screenshots` (only on failure)
+
+The workflow also supports manual triggering (`workflow_dispatch`) with an optional `browser` input so you can run a one-off Firefox or Edge pipeline from the GitHub Actions UI.
 
 ---
 
@@ -132,6 +169,9 @@ Feature: OrangeHRM Login
 
 ## Architecture
 
+### Page Object Model
+`pages/LoginPage.java` and `pages/DirectoryPage.java` each extend `BasePage`. Locators are private static `By` fields, and every interaction is exposed as a named method. Step definitions instantiate the page object with `BrowserDriver.getDriver()` and call these methods directly — no raw `By` locators in step code.
+
 ### BasePage — Reusable Action Layer
 All page interactions go through `BasePage`, which wraps every action with a `WebDriverWait` (30s timeout) to handle dynamic elements gracefully:
 
@@ -144,12 +184,12 @@ waitForVisibility(By locator)
 waitForClickability(By locator)
 ```
 
-### Page Locators
-Locator classes (e.g. `LoginPage.java`, `DirectoryPage.java`) hold static `By` fields only — no logic, no driver references. This keeps locator maintenance separate from behavior.
+### Locators (Deprecated)
+The original `locators/` package (`LoginPage.java`, `DirectoryPage.java`) held static `By` fields only — no logic, no driver references. These are kept for reference but superseded by the `pages/` package.
 
-### Hooks — Screenshots on Failure
-`Hooks.java` automatically captures a screenshot on any failing scenario:
-- Attaches it inline to the **Cucumber HTML report**
+### Hooks — Lifecycle & Screenshots on Failure
+`utility/Hooks.java` manages the browser lifecycle via `@Before` / `@After`. On failure it:
+- Attaches the screenshot inline to the **Cucumber HTML report**
 - Saves a timestamped `.png` to `target/screenshots/`
 
 ### FakeDataUtil — Dynamic Test Data
@@ -188,7 +228,7 @@ Open the `.html` file in any browser for a full visual breakdown of passed/faile
 2. Create a feature branch: `git checkout -b feature/your-feature`
 3. Add your `.feature` file under `src/test/java/features/`
 4. Implement step definitions under `src/test/java/stepDefinition/`
-5. Add locators under `src/test/java/locators/`
+5. Add page objects under `src/test/java/pages/`
 6. Run `mvn test` to verify
 7. Open a pull request
 
